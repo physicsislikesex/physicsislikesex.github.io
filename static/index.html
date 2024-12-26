@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <link rel="shortcut icon" href="">
+    <link rel="shortcut icon" href="#" />
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+    <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
+
+
+    <meta charset="UTF-8">
+    <title>픽셀 드로잉</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+        #pixelCanvas {
+            position: absolute;
+            border: 2px solid #333;
+            border-radius: 8px;
+            cursor: crosshair;
+            image-rendering: pixelated;
+            transition: width 0.1s ease, height 0.1s ease;
+            transform-origin: center center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            background-color: white;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f5f5f5;  /* 연한 회색 배경 */
+        }
+        #canvas {
+            position: relative;
+            z-index: 2;
+        }
+        #colorPickerContainer {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            display: none;
+            padding: 20px;
+            background: white;
+            border: 2px solid #000;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+            margin-top: 15px;
+        }
+        .palette-color {
+            width: 30px;
+            height: 30px;
+            border: 2px solid #000;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .palette-color:hover {
+            transform: scale(1.1);
+        }
+        .color-picker-label {
+            display: block;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        #colorPicker {
+            width: 100%;
+            height: 40px;
+            margin-bottom: 10px;
+        }
+        #userCount {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        #chatContainer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            height: 400px;
+            background-color: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            display: none;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        #chatMessages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+            color: white;
+        }
+
+        #chatInput {
+            display: flex;
+            padding: 10px;
+            gap: 5px;
+        }
+
+        #messageInput {
+            flex-grow: 1;
+            padding: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+
+        #sendButton {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+
+        .chat-message {
+            margin-bottom: 5px;
+            word-wrap: break-word;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-content {
+            color: white;
+            margin-bottom: 2px;
+        }
+
+        .message-time {
+            color: #888888;
+            font-size: 0.5em;
+            align-self: flex-end;
+        }
+
+        .saved-colors {
+            margin-top: 15px;
+            border-top: 1px solid #ccc;
+            padding-top: 15px;
+        }
+        .saved-colors-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px 5px;
+            margin-top: 25px;
+            padding: 0 5px;
+        }
+        .saved-color-slot {
+            width: 35px;
+            height: 35px;
+            border: 2px solid #333;
+            border-radius: 5px;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+            margin-top: 10px;
+        }
+        .saved-color-slot:nth-child(n+6) {
+            margin-top: 20px;
+        }
+        .saved-color-slot:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        }
+        .saved-color-slot::before {
+            content: attr(data-key);
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: bold;
+            color: #333;
+            background-color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+        .saved-color-slot::after {
+            content: "Ctrl + " attr(data-key);
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #666;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            background-color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+        .saved-color-slot:hover::after {
+            opacity: 1;
+        }
+        .color-picker-label {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .saved-colors .color-picker-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .saved-colors .color-picker-label::before,
+        .saved-colors .color-picker-label::after {
+            content: "";
+            height: 1px;
+            flex-grow: 1;
+            background: #ccc;
+        }
+        #gridToggle {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 8px 15px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 14px;
+        }
+        #gridToggle:hover {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        /* 캔버스 호버 효과 */
+        #pixelCanvas:hover {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+        /* 드래그 중일 때 커서 변경 */
+        #pixelCanvas:active {
+            cursor: grabbing;
+        }
+        /* 다운로드 버튼 스타일 추가 */
+        #downloadButton {
+            position: fixed;
+            top: 20px;
+            left: 120px; /* gridToggle 버튼 옆에 위치 */
+            padding: 8px 15px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 14px;
+        }
+        #downloadButton:hover {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <button id="gridToggle">격자 켜기</button>
+    <button id="downloadButton">이미지 저장</button>
+    <div id="canvas-container" style="overflow: hidden;">
+        <canvas id="pixelCanvas" width="2560" height="2560"></canvas>
+    </div>
+    <div id="userCount">접속자 수: 1</div>
+    
+    <!-- 채팅 컨테이너 -->
+    <div id="chatContainer">
+        <div id="chatMessages"></div>
+        <div id="chatInput">
+            <input type="text" id="messageInput" placeholder="메시지를 입력하세요... (최대 100자)" maxlength="100">
+            <button id="sendButton">전송</button>
+        </div>
+    </div>
+
+    <div id="colorPickerContainer">
+        <label class="color-picker-label">색상 선택</label>
+        <input type="color" id="colorPicker" value="#000000">
+        <div class="color-palette">
+            <!-- 기본 색상들 -->
+        </div>
+        <div class="saved-colors">
+            <div class="color-picker-label">저장된 팔레트</div>
+            <div class="saved-colors-grid"></div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <!-- 컨트롤 버튼들 -->
+    </div>
+
+    <script>
+        const canvas = document.getElementById('pixelCanvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const PIXEL_SIZE = 10;
+        const GRID_SIZE = 256;
+        const CANVAS_SIZE = PIXEL_SIZE * GRID_SIZE;
+        const ERASE_DELAY = 500;  // 지우개 딜레이 0.5초
+        const DRAW_DELAY = 50;    // 그리기 딜레이 0.05초
+        
+        let canClick = true;
+        const MIN_SCALE = 0.8;
+        const MAX_SCALE = 5;
+        const SCALE_STEP = 0.1;
+        let scale = MIN_SCALE;
+        let currentColor = '#000000';
+
+        const colorPickerContainer = document.getElementById('colorPickerContainer');
+        const palette = document.querySelector('.color-palette');
+        
+        // 기본 색상 배열
+        const defaultColors = [
+            '#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', // 검정, 흰색, 빨강, 초록, 랑
+            '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#800080', // 노랑, 젠, 시안, 주황, 보라
+            '#008000', '#800000', '#008080', '#FFC0CB', '#A52A2A', // 녹색, 갈색, 청록, 홍, 갈색
+            '#808080', '#C0C0C0', '#FFD700', '#FF4500', '#4B0082'  // 회색, 은색, 금색, 주황빨강, 남색
+        ];
+
+        // 팔레트 색상 버튼 생성
+        defaultColors.forEach(color => {
+            const colorBtn = document.createElement('div');
+            colorBtn.className = 'palette-color';
+            colorBtn.style.backgroundColor = color;
+            colorBtn.addEventListener('click', () => {
+                currentColor = color;
+                colorPicker.value = color;
+                colorPickerContainer.style.display = 'none';
+            });
+            palette.appendChild(colorBtn);
+        });
+
+        // 저장된 색상 위한 배열 추가
+        const savedColors = Array(10).fill('#000000'); // 0-9까지 기본값 검정색
+
+        // 저장된 색상 슬롯 생성 함수 수정
+        function updateSavedColorSlots() {
+            const savedColorsGrid = colorPickerContainer.querySelector('.saved-colors-grid');
+            savedColorsGrid.innerHTML = '';
+            
+            const order = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+            
+            for (let i of order) {
+                const slot = document.createElement('div');
+                slot.className = 'saved-color-slot';
+                slot.style.backgroundColor = savedColors[i];
+                slot.setAttribute('data-key', i);
+                slot.title = `클릭하여 색상 사용 / Ctrl+${i}로 현재 색상 저장`;
+                
+                // 클릭 이벤트 추가
+                slot.addEventListener('click', () => {
+                    currentColor = savedColors[i];
+                    colorPicker.value = currentColor;
+                });
+                
+                savedColorsGrid.appendChild(slot);
+            }
+        }
+
+        // 초기 슬롯 생성
+        updateSavedColorSlots();
+
+        function handleWheel(e) {
+            e.preventDefault();
+            
+            // 현재 스케일이 MIN_SCALE이고 축소하려는 경우 즉시 리턴
+            if (scale <= MIN_SCALE && e.deltaY > 0) {
+                scale = MIN_SCALE; // 스케일 강제 고정
+                centerCanvas();
+                return;
+            }
+            
+            // 최대 스케일 체크
+            if (scale >= MAX_SCALE && e.deltaY < 0) {
+                return;
+            }
+            
+            const oldScale = scale;
+            
+            if (e.deltaY < 0) {
+                // 확대
+                scale = Math.min(scale + SCALE_STEP, MAX_SCALE);
+            } else {
+                // 축소
+                scale = Math.max(scale - SCALE_STEP, MIN_SCALE);
+            }
+            
+            if (scale === MIN_SCALE) {
+                centerCanvas();
+                return;
+            }
+            
+            if (oldScale !== scale) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleRatio = scale / oldScale;
+                canvasOffsetX = e.clientX - (e.clientX - canvasOffsetX) * scaleRatio;
+                canvasOffsetY = e.clientY - (e.clientY - canvasOffsetY) * scaleRatio;
+                ensureCanvasVisible();
+                updateCanvasSize();
+            }
+        }
+
+        function centerCanvas() {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const baseSize = 800 * scale;  // 스케일이 적용된 크기
+            
+            // 정확한 중앙 위치 계산
+            canvasOffsetX = (windowWidth - baseSize) / 2;
+            canvasOffsetY = (windowHeight - baseSize) / 2;
+            
+            // 캔버스 위치와 크기 즉시 업데이트
+            canvas.style.width = `${baseSize}px`;
+            canvas.style.height = `${baseSize}px`;
+            canvas.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px) scale(${scale})`;
+        }
+
+        function updateCanvasSize() {
+            const baseSize = 800;
+            canvas.style.width = `${baseSize * scale}px`;
+            canvas.style.height = `${baseSize * scale}px`;
+            canvas.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px) scale(${scale})`;
+        }
+
+        // 페이지 로드 시 초기화
+        window.addEventListener('load', () => {
+            scale = MIN_SCALE;
+            centerCanvas();
+            updateCanvasSize();
+        });
+
+        // 창 크기 변경 시 최앙 정렬
+        window.addEventListener('resize', () => {
+            if (scale === MIN_SCALE) {
+                centerCanvas();
+            }
+        });
+
+        function handleMouseMove(e) {
+            if (isDragging) {
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
+                
+                canvasOffsetX += deltaX;
+                canvasOffsetY += deltaY;
+                
+                // 캔버스가 완전히 사라지지 않도록 체크
+                ensureCanvasVisible();
+                
+                canvas.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px) scale(${scale})`;
+                
+                lastX = e.clientX;
+                lastY = e.clientY;
+            }
+        }
+
+        function ensureCanvasVisible() {
+            const rect = canvas.getBoundingClientRect();
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            
+            // 캔버스가 화면에서 최전히 벗어났는지 확인
+            if (rect.right < 0 || rect.left > windowWidth || 
+                rect.bottom < 0 || rect.top > windowHeight) {
+                // 캔버스가 완전히 벗어난 경우 화면 중���으로 복귀
+                canvasOffsetX = (windowWidth - rect.width) / 2;
+                canvasOffsetY = (windowHeight - rect.height) / 2;
+            }
+        }
+
+        document.getElementById('canvas-container').addEventListener('wheel', handleWheel, { passive: false });
+        canvas.width = CANVAS_SIZE;
+        canvas.height = CANVAS_SIZE;
+
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+
+        // 픽셀 데이터를 저장할 배열 추가
+        let pixelData = [];
+
+        // WebSocket onmessage 이벤트 수정
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'user_count') {
+                document.getElementById('userCount').textContent = `접속자 수: ${data.count}`;
+            } else if (data.type === 'chat') {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'chat-message';
+                
+                const contentSpan = document.createElement('span');
+                contentSpan.className = 'message-content';
+                contentSpan.textContent = `${data.username}: ${data.message}`;
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'message-time';
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                timeSpan.textContent = `${hours}:${minutes}`;
+                
+                messageDiv.appendChild(contentSpan);
+                messageDiv.appendChild(timeSpan);
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } else if (data.type === 'clear_canvas') {
+                // 캔버스 초기화 메시지를 받으면 모든 픽셀 데이터를 지우고 캔버스를 다시 그립니다
+                pixelData = [];
+                ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+                if (showGrid) {
+                    drawGrid();
+                }
+            } else {
+                // 기존 픽셀 데이터 처리
+                if (data.color === 'erase') {
+                    pixelData = pixelData.filter(pixel => 
+                        pixel.x !== data.x || pixel.y !== data.y
+                    );
+                } else {
+                    pixelData.push(data);
+                }
+                redrawCanvas();
+            }
+        };
+
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let canvasOffsetX = 0;
+        let canvasOffsetY = 0;
+
+        function handleMouseDown(e) {
+            e.preventDefault();
+            
+            // 마우스 좌표 계산
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            const gridX = Math.floor(x / PIXEL_SIZE) * PIXEL_SIZE;
+            const gridY = Math.floor(y / PIXEL_SIZE) * PIXEL_SIZE;
+
+            if (e.button === 2) { // 우클릭
+                if (e.shiftKey) {
+                    isDragging = true;
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                } else if (canClick) {
+                    // 우클릭 삭제
+                    const pixelData = {
+                        x: gridX,
+                        y: gridY,
+                        color: 'erase',
+                        pixelSize: PIXEL_SIZE
+                    };
+                    ws.send(JSON.stringify(pixelData));
+                    
+                    canClick = false;
+                    canvas.style.cursor = 'not-allowed';
+                    setTimeout(() => {
+                        canClick = true;
+                        canvas.style.cursor = 'crosshair';
+                    }, ERASE_DELAY);
+                }
+            } else if (e.button === 0 && canClick) { // 좌클릭
+                // 좌클릭 리기
+                const pixelData = {
+                    x: gridX,
+                    y: gridY,
+                    color: currentColor,
+                    pixelSize: PIXEL_SIZE
+                };
+                ws.send(JSON.stringify(pixelData));
+                
+                canClick = false;
+                canvas.style.cursor = 'not-allowed';
+                setTimeout(() => {
+                    canClick = true;
+                    canvas.style.cursor = 'crosshair';
+                }, DRAW_DELAY);
+            }
+        }
+
+        function handleMouseUp() {
+            isDragging = false;
+        }
+
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('mouseleave', handleMouseUp);
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            return false;
+        });
+
+        canvas.style.position = 'relative';
+        canvas.style.transition = 'transform 0.0s';
+
+        updateCanvasSize();
+
+        // 팔레트 표시 상태를 추적하는 변수 추가
+        let isPaletteVisible = false;
+
+        // 키보드 이벤트 처리 수정
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT') return;
+            
+            if (e.key === 'Control') {
+                e.preventDefault(); // Ctrl 키의 기본 동작 방지
+                isPaletteVisible = !isPaletteVisible; // 상태 토글
+                colorPickerContainer.style.display = isPaletteVisible ? 'block' : 'none';
+            } else if (e.key === 't') {
+                e.preventDefault();
+                isChatVisible = !isChatVisible;
+                chatContainer.style.display = isChatVisible ? 'flex' : 'none';
+                if (isChatVisible) {
+                    messageInput.focus();
+                }
+            } else if (e.key >= '0' && e.key <= '9') {
+                const num = parseInt(e.key);
+                if (e.ctrlKey) {
+                    // Ctrl + 숫자: 현재 색상 저장
+                    savedColors[num] = currentColor;
+                    updateSavedColorSlots();
+                } else {
+                    // 숫자만: 저장된 색상 불러오기
+                    currentColor = savedColors[num];
+                    colorPicker.value = currentColor;
+                }
+            }
+        });
+
+        // Ctrl 키를 떼는 이벤트는 제거
+        // document.addEventListener('keyup', function(e) {
+        //     if (e.key === 'Control') {
+        //         colorPickerContainer.style.display = 'none';
+        //     }
+        // });
+
+        colorPicker.addEventListener('change', function(e) {
+            currentColor = e.target.value;
+        });
+
+        // 색상 선택기 외 클릭 시 닫기
+        document.addEventListener('mousedown', function(e) {
+            if (!colorPickerContainer.contains(e.target) && colorPickerContainer.style.display === 'block') {
+                colorPickerContainer.style.display = 'none';
+            }
+        });
+
+        // 채팅 관련 변수
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const chatMessages = document.getElementById('chatMessages');
+        let isChatVisible = false;
+        let lastMessageTime = 0;
+        const CHAT_COOLDOWN = 1000;
+
+        // 채팅창 초기 상태 설정
+        chatContainer.style.display = 'none';
+        isChatVisible = false;
+
+        // 채팅 메시지 전송
+        function sendMessage() {
+            const now = Date.now();
+            const timeSinceLastMessage = now - lastMessageTime;
+
+            if (timeSinceLastMessage < CHAT_COOLDOWN) {
+                alert(`메시지를 너무 빠르게 보내 있니다. ${Math.ceil((CHAT_COOLDOWN - timeSinceLastMessage) / 1000)}초 후에 다시 시도해주세요.`);
+                return;
+            }
+
+            const message = messageInput.value.trim();
+            if (message && message.length <= 100) {
+                const chatData = {
+                    type: 'chat',
+                    message: message
+                };
+                ws.send(JSON.stringify(chatData));
+                messageInput.value = '';
+                lastMessageTime = now;
+            } else if (message.length > 100) {
+                alert('메시지는 100자를 초과할 수 없습니다.');
+            }
+        }
+
+        // 전송 버튼 클릭 이벤트
+        sendButton.addEventListener('click', sendMessage);
+
+        // Enter 키 입력 이벤트
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        let showGrid = false;
+
+        // 격자 그리기 함수 수정
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(128, 128, 128, 0.3)';
+            ctx.lineWidth = 1;
+
+            // 수직선
+            for (let x = 0; x <= CANVAS_SIZE; x += PIXEL_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, CANVAS_SIZE);
+                ctx.stroke();
+            }
+
+            // 수평선
+            for (let y = 0; y <= CANVAS_SIZE; y += PIXEL_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(CANVAS_SIZE, y);
+                ctx.stroke();
+            }
+        }
+
+        // 캔버스 다시 그리기 함수 수정
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            // 저장된 모든 픽셀 다시 그리기
+            pixelData.forEach(pixel => {
+                const gridX = Math.floor(pixel.x / PIXEL_SIZE) * PIXEL_SIZE;
+                const gridY = Math.floor(pixel.y / PIXEL_SIZE) * PIXEL_SIZE;
+                ctx.fillStyle = pixel.color;
+                ctx.fillRect(gridX, gridY, PIXEL_SIZE, PIXEL_SIZE);
+            });
+            
+            // 격자 그리기
+            if (showGrid) {
+                drawGrid();
+            }
+        }
+
+        // 격자 토글 버튼 이벤트
+        const gridToggle = document.getElementById('gridToggle');
+        gridToggle.addEventListener('click', () => {
+            showGrid = !showGrid;
+            gridToggle.textContent = showGrid ? '격자 끄기' : '격자 켜기';
+            redrawCanvas();
+        });
+
+        // 캔버스 다운로드 함수 추가
+        function downloadCanvas() {
+            // 임시 캔버스 생성
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = CANVAS_SIZE;
+            tempCanvas.height = CANVAS_SIZE;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 현재 캔버스 내용 복사
+            tempCtx.fillStyle = 'white';  // 배경색 하얀색으로 설정
+            tempCtx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            pixelData.forEach(pixel => {
+                const gridX = Math.floor(pixel.x / PIXEL_SIZE) * PIXEL_SIZE;
+                const gridY = Math.floor(pixel.y / PIXEL_SIZE) * PIXEL_SIZE;
+                tempCtx.fillStyle = pixel.color;
+                tempCtx.fillRect(gridX, gridY, PIXEL_SIZE, PIXEL_SIZE);
+            });
+
+            // 다운로드 링크 생성
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            link.download = `pixel-canvas-${timestamp}.png`;
+            link.href = tempCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // 키보드 이벤트 핸들러 수정
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT') return;
+            
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();  // 브라우저 기본 저장 동작 방지
+                downloadCanvas();
+            } else if (e.key === 'Control') {
+                // ... existing Control key code ...
+            }
+            // ... rest of the existing key handlers ...
+        });
+
+        // 다운로드 버튼 이벤트 리스너 추가
+        const downloadButton = document.getElementById('downloadButton');
+        downloadButton.addEventListener('click', downloadCanvas);
+    </script>
+</body>
+</html> 
